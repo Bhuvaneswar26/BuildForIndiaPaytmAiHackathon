@@ -14,8 +14,8 @@ class Settings(BaseSettings):
     paytm_merchant_key: str = "mock-merchant-key"
     paytm_skip_checksum: bool = True
 
-    cron_hour: int = 22
-    cron_minute: int = 0
+    cron_hour: int = 10
+    cron_minute: int = 30
 
     alert_agent_url: str = "http://127.0.0.1:8090"
     sqlite_path: str = "./data/ingest.dev.db"

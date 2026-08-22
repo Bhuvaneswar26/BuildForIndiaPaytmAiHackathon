@@ -19,6 +19,13 @@
     button { background:var(--teal); color:#04202c; font-weight:700; cursor:pointer; }
     .muted { color:var(--muted); font-size:13px; }
     audio { width:100%; margin-top:8px; }
+    @media (max-width: 600px) {
+      header { padding: 14px 16px; display: block; }
+      header .muted { margin-top: 6px; }
+      .wrap { padding: 16px; }
+      .row { flex-direction: column; }
+      .row input, .row select, .row button { width: 100%; min-height: 44px; }
+    }
   </style>
 </head>
 <body>
