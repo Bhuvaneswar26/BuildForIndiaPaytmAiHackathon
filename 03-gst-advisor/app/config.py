@@ -4,14 +4,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _ROOT = Path(__file__).resolve().parent.parent
 _ENV = _ROOT / ".env"
-_EXAMPLE = _ROOT / ".env.example"
-# .env overrides .env.example so a copied example still activates Sarvam.
-_ENV_FILES = tuple(str(p) for p in (_EXAMPLE, _ENV) if p.exists())
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=_ENV_FILES or None,
+        env_file=str(_ENV),
         env_file_encoding="utf-8",
         extra="ignore",
     )
