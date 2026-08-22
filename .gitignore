@@ -17,6 +17,5 @@ uploads/
 .idea/
 dist/
 build/
-/02-alert-agent/data/notifications.jsonl
-notification.json
+notifications.jsonl
 *.env*
