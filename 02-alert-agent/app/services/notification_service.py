@@ -10,6 +10,7 @@ from app.config import settings
 
 async def dispatch_notification(payload: dict) -> dict:
     url = settings.mcp_notify_url.rstrip("/") + "/tools/notify_merchant"
+    print("[DISPATCH_PAYLOAD]", json.dumps(payload, ensure_ascii=False))
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.post(url, json=payload)

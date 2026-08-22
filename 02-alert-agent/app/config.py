@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     advisor_public_url: str = "http://127.0.0.1:8100"
     gst_portal: str = "https://reg.gst.gov.in/registration/"
     sarvam_api_key: str = ""
+    sarvam_base_url: str = "https://api.sarvam.ai/v1/chat/completions"
+    sarvam_model: str = "sarvam-105b"
     openai_api_key: str = ""
     whatsapp_mode: str = "mock"
     notify_log: str = "./data/notifications.jsonl"

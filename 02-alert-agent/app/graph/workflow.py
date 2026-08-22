@@ -13,9 +13,13 @@ except ModuleNotFoundError:
 from langgraph.graph import END, START, StateGraph
 
 from app.domain.types import AlertState
+from app.guardrails.decisions import decide_send
+from app.guardrails.fallback import get_fallback_response
+from app.guardrails.policy import evaluate_policy
+from app.guardrails.validators import validate_message_text, validate_payload
+from app.services.gemini_service import generate_alert_copy
 from app.services.notification_service import dispatch_notification
 from app.services.risk_service import classify_risk, get_checklist
-from app.services.template_service import render_message
 
 
 def normalize_input(state: AlertState) -> AlertState:
@@ -57,8 +61,107 @@ def evaluate_risk(state: AlertState) -> AlertState:
     return state
 
 
+def decide_language(state: AlertState) -> AlertState:
+    metrics = state["metrics"]
+    preferred = (metrics.get("language") or "en").split("-")[0].lower()
+    allowed = {"en", "hi", "te"}
+    chosen = preferred if preferred in allowed else "en"
+    metrics["language"] = chosen
+
+    notify_channel = "email" if metrics.get("email") else "whatsapp"
+    state["context"]["language_policy"] = {
+        "preferred_language": preferred,
+        "selected_language": chosen,
+        "notify_channel": notify_channel,
+        "tone": "formal_friendly" if chosen == "en" else "calm_practical",
+        "subject_prefix": "GST Pulse",
+        "reasoning": (
+            f"Merchant preferred language '{preferred}' but unsupported values fallback to 'en'; "
+            f"the message will be written in '{chosen}' for the {notify_channel} channel."
+        ),
+    }
+    return state
+
+
+def build_merchant_guidance(state: AlertState) -> AlertState:
+    metrics = state["metrics"]
+    risk = state["risk"]
+    pct = metrics.get("pct")
+    comp_eligible = bool(metrics.get("composition_limit") and (metrics.get("aggregate_turnover") or 0) < metrics.get("composition_limit"))
+
+    guidance_map = {
+        "watch": {
+            "summary": "Monitor turnover and verify whether other income should be included.",
+            "suggestions": [
+                "Review recent sales and cash entries",
+                "Check whether other declared income should be added",
+                "Keep the estimate up to date before the next review"
+            ],
+        },
+        "prepare": {
+            "summary": "Begin preparing the GST registration flow and understand whether composition may help.",
+            "suggestions": [
+                "Check the GST registration checklist",
+                "Review composition eligibility before filing",
+                "Prepare the key business documents and bank details"
+            ],
+        },
+        "act_soon": {
+            "summary": "Start the registration checklist this month and avoid leaving it for the last minute.",
+            "suggestions": [
+                "Open the GST registration portal and begin review",
+                "Get PAN, Aadhaar, and address proof ready",
+                "Use the advisor link to clarify any threshold doubts"
+            ],
+        },
+        "imminent": {
+            "summary": "This is a start-now reminder; do not wait for a notice to begin the registration flow.",
+            "suggestions": [
+                "Start registration immediately",
+                "Gather all identity and business documents",
+                "Use the advisor channel if the estimate or threshold needs a quick check"
+            ],
+        },
+    }
+
+    if comp_eligible and risk in {"prepare", "act_soon"}:
+        guidance_map[risk]["suggestions"].append("Composition may still be available; confirm whether it suits your business model.")
+
+    state["context"]["merchant_guidance"] = {
+        "risk_category": risk,
+        "pct": pct,
+        "summary": guidance_map[risk]["summary"],
+        "suggestions": guidance_map[risk]["suggestions"],
+        "composition_eligible": comp_eligible,
+    }
+    return state
+
+
+def apply_guardrails(state: AlertState) -> AlertState:
+    metrics = state["metrics"]
+    risk = state["risk"]
+
+    policy_result = evaluate_policy(metrics, risk)
+    state["context"]["guardrails"] = {
+        "allow_send": policy_result["allow_send"],
+        "blocked_reasons": policy_result["violations"],
+        "policy": policy_result["policy"],
+        "risk_category": risk,
+    }
+
+    if not policy_result["allow_send"]:
+        state["context"]["guardrails"]["fallback"] = get_fallback_response()
+    return state
+
+
 def render_alert_copy(state: AlertState) -> AlertState:
-    state["copy"] = render_message(state["risk"], state["metrics"])
+    state["copy"] = generate_alert_copy(state["risk"], state["metrics"])
+    if not state["copy"].get("channel_title"):
+        state["copy"] = {
+            "channel_title": "GST Pulse Alert",
+            "body": "Please review your GST registration status.",
+            "language": state["metrics"].get("language", "en"),
+        }
     state["context"]["language"] = state["copy"].get("language", "en")
     return state
 
@@ -66,24 +169,26 @@ def render_alert_copy(state: AlertState) -> AlertState:
 def validate_content(state: AlertState) -> AlertState:
     metrics = state["metrics"]
     copy = state["copy"]
-    issues = []
+    payload = {
+        "merchant_id": metrics.get("merchant_id"),
+        "phone": metrics.get("phone"),
+        "email": metrics.get("email"),
+        "title": copy.get("channel_title"),
+        "body": copy.get("body"),
+        "language": copy.get("language", "en"),
+    }
 
-    if not copy.get("channel_title"):
-        issues.append("missing_title")
-    if not copy.get("body"):
-        issues.append("missing_body")
-    if not (metrics.get("email") or metrics.get("phone")):
-        issues.append("missing_contact")
-    if not metrics.get("merchant_id"):
-        issues.append("missing_merchant_id")
-
-    state["validation"] = {
-        "ok": not issues,
-        "missing_fields": issues,
+    payload_validation = validate_payload(payload)
+    message_validation = validate_message_text(copy.get("body", ""))
+    combined = {
+        "ok": payload_validation["ok"] and message_validation["ok"],
+        "issues": payload_validation["issues"] + message_validation["issues"],
         "language": copy.get("language", "en"),
         "risk": state["risk"],
     }
-    state["context"]["validation_summary"] = state["validation"]
+
+    state["validation"] = combined
+    state["context"]["validation_summary"] = combined
     return state
 
 
@@ -134,6 +239,9 @@ def build_graph() -> Any:
     graph = StateGraph(AlertState)
     graph.add_node("normalize_input", normalize_input)
     graph.add_node("evaluate_risk", evaluate_risk)
+    graph.add_node("decide_language", decide_language)
+    graph.add_node("build_merchant_guidance", build_merchant_guidance)
+    graph.add_node("apply_guardrails", apply_guardrails)
     graph.add_node("render_alert_copy", render_alert_copy)
     graph.add_node("validate_content", validate_content)
     graph.add_node("build_notification_payload", build_notification_payload)
@@ -142,7 +250,10 @@ def build_graph() -> Any:
 
     graph.add_edge(START, "normalize_input")
     graph.add_edge("normalize_input", "evaluate_risk")
-    graph.add_edge("evaluate_risk", "render_alert_copy")
+    graph.add_edge("evaluate_risk", "decide_language")
+    graph.add_edge("decide_language", "build_merchant_guidance")
+    graph.add_edge("build_merchant_guidance", "apply_guardrails")
+    graph.add_edge("apply_guardrails", "render_alert_copy")
     graph.add_edge("render_alert_copy", "validate_content")
     graph.add_edge("validate_content", "build_notification_payload")
     graph.add_edge("build_notification_payload", "dispatch_to_mcp")
