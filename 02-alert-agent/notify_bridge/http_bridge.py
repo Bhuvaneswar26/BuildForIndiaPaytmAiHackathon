@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     smtp_user: str = ""
     smtp_password: str = ""
     smtp_from: str = "gst-pulse@example.com"
-    paytm_logo_url: str = ""
+    logo_app_url: str = ""
     notify_log: str = "./data/notifications.jsonl"
 
 
@@ -57,18 +57,22 @@ def _log(event: dict) -> None:
 
 def send_whatsapp(phone: str | None, title: str, body: str) -> dict:
     text = f"{title}\n\n{body}"
+    logo_url = (settings.logo_app_url or "").strip()
     if settings.whatsapp_mode != "live" or not settings.whatsapp_token:
-        _log({"channel": "whatsapp", "mode": "mock", "to": phone, "text": text})
-        return {"channel": "whatsapp", "mode": "mock", "to": phone, "ok": True}
+        _log({"channel": "whatsapp", "mode": "mock", "to": phone, "text": text, "logo_url": logo_url})
+        return {"channel": "whatsapp", "mode": "mock", "to": phone, "logo_url": logo_url, "ok": True}
     import httpx
 
     url = f"https://graph.facebook.com/v20.0/{settings.whatsapp_phone_number_id}/messages"
     payload = {
         "messaging_product": "whatsapp",
         "to": (phone or "").lstrip("+"),
-        "type": "text",
-        "text": {"body": text[:4000]},
+        "type": "image" if logo_url else "text",
     }
+    if logo_url:
+        payload["image"] = {"link": logo_url, "caption": text[:1024]}
+    else:
+      payload["text"] = {"body": text[:4000]}
     resp = httpx.post(
         url,
         headers={"Authorization": f"Bearer {settings.whatsapp_token}"},
@@ -85,7 +89,7 @@ def _normalize_email_text(value: str) -> str:
 
 
 def _resolve_paytm_logo_data_uri() -> str:
-    configured = (settings.paytm_logo_url or "").strip()
+    configured = (settings.logo_app_url or "").strip()
     if configured:
         return configured
 
