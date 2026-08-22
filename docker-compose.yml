@@ -25,6 +25,6 @@ services:
   advisor:
     build: ./03-gst-advisor
     env_file:
-      - ./03-gst-advisor/.env.example
+      - ./03-gst-advisor/.env
     ports:
       - "8100:8100"
