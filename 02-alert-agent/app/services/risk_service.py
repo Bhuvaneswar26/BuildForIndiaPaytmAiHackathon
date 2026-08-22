@@ -1,23 +1,20 @@
-"""Rule-based risk classification. LLM may refine copy; categories stay deterministic."""
-
 from __future__ import annotations
 
-from typing import Literal
-
-Risk = Literal["watch", "prepare", "act_soon", "imminent"]
+from app.domain.types import Risk
 
 
-def classify(pct: float) -> Risk:
-    if pct >= 95:
+def classify_risk(pct: float | int | str | None) -> Risk:
+    value = float(pct or 0)
+    if value >= 95:
         return "imminent"
-    if pct >= 80:
+    if value >= 80:
         return "act_soon"
-    if pct >= 60:
+    if value >= 60:
         return "prepare"
     return "watch"
 
 
-def checklist() -> list[str]:
+def get_checklist() -> list[str]:
     return [
         "PAN of the business / proprietor",
         "Bank account details (cancelled cheque or passbook)",
