@@ -1,5 +1,3 @@
-"""Formal notification templates. Skills describe the same format for any LLM path."""
-
 from __future__ import annotations
 
 TEMPLATES = {
@@ -34,7 +32,8 @@ TEMPLATES = {
                 "నమస్తే {name},\n\n"
                 "{fy_label}లో మీ Paytm + ఇతర ఆదాయం {aggregate} / {threshold} ({pct}%). "
                 "ఇది పన్ను నోటీసు కాదు — ముందస్తు సమాచారం.\n\n"
-                "ప్రశ్నలు: {advisor_url}\nనమోదు: {gst_portal}\n"
+                "ప్రశ్నలు: {advisor_url}\n"
+                "నమోదు: {gst_portal}\n"
             ),
         },
     },
@@ -59,7 +58,8 @@ TEMPLATES = {
                 "नमस्ते {name},\n\n"
                 "आप GST सीमा के {pct}% पर हैं ({aggregate} / {threshold}). मौजूदा रफ्तार से लगभग {months} महीने में सीमा पार हो सकती है।\n\n"
                 "पंजीकरण का मतलब हमेशा ज्यादा टैक्स नहीं। कंपोजीशन स्कीम एक सरल विकल्प हो सकता है।\n\n"
-                "पूछें: {advisor_url}\nपोर्टल: {gst_portal}\n"
+                "पूछें: {advisor_url}\n"
+                "पोर्टल: {gst_portal}\n"
             ),
         },
         "te": {
@@ -68,7 +68,8 @@ TEMPLATES = {
                 "నమస్తే {name},\n\n"
                 "మీరు GST పరిమితిలో {pct}% వద్ద ఉన్నారు. ఇప్పటి వేగంతో సుమారు {months} నెలల్లో దాటవచ్చు.\n\n"
                 "నమోదు అంటే ఎక్కువ పన్ను కాదు. Composition Scheme సులభ మార్గం కావచ్చు.\n\n"
-                "{advisor_url}\n{gst_portal}\n"
+                "{advisor_url}\n"
+                "{gst_portal}\n"
             ),
         },
     },
@@ -88,7 +89,8 @@ TEMPLATES = {
             "body": (
                 "नमस्ते {name},\n\n"
                 "आप {pct}% पर हैं। सीमा पार होने से पहले पोर्टल पर शुरू करना नोटिस के बाद भागने से आसान है।\n\n"
-                "{advisor_url}\n{gst_portal}\n"
+                "{advisor_url}\n"
+                "{gst_portal}\n"
             ),
         },
         "te": {
@@ -96,7 +98,8 @@ TEMPLATES = {
             "body": (
                 "నమస్తే {name},\n\n"
                 "మీరు {pct}% వద్ద ఉన్నారు. నోటీసు రాకముందే పోర్టల్‌లో మొదలుపెట్టండి.\n\n"
-                "{advisor_url}\n{gst_portal}\n"
+                "{advisor_url}\n"
+                "{gst_portal}\n"
             ),
         },
     },
@@ -118,7 +121,8 @@ TEMPLATES = {
             "body": (
                 "नमस्ते {name},\n\n"
                 "अनुमानित टर्नओवर सीमा का {pct}% है। यह सरकारी नोटिस नहीं है, अभी शुरू करने का रिमाइंडर है।\n\n"
-                "{advisor_url}\n{gst_portal}\n"
+                "{advisor_url}\n"
+                "{gst_portal}\n"
             ),
         },
         "te": {
@@ -126,21 +130,26 @@ TEMPLATES = {
             "body": (
                 "నమస్తే {name},\n\n"
                 "మీ టర్నోవర్ పరిమితిలో {pct}%. ఇది ప్రభుత్వ నోటీసు కాదు.\n\n"
-                "{advisor_url}\n{gst_portal}\n"
+                "{advisor_url}\n"
+                "{gst_portal}\n"
             ),
         },
     },
 }
 
 
-def inr(n: float) -> str:
-    return "₹" + f"{int(round(n)):,}".replace(",", ",")
+def inr(value: float | int | str | None) -> str:
+    try:
+        amount = float(value or 0)
+    except (TypeError, ValueError):
+        return "₹0"
+    return "₹" + f"{int(round(amount)):,}"
 
 
-def render(risk: str, metrics: dict) -> dict:
+def render_message(risk: str, metrics: dict) -> dict:
     lang = (metrics.get("language") or "en").split("-")[0]
     pack = TEMPLATES[risk]
-    t = pack.get(lang) or pack["en"]
+    template = pack.get(lang) or pack["en"]
     fields = {
         "name": metrics.get("name") or "merchant",
         "pct": metrics.get("pct"),
@@ -152,4 +161,8 @@ def render(risk: str, metrics: dict) -> dict:
         "gst_portal": metrics.get("gst_portal") or "",
         "composition_limit": inr(metrics.get("composition_limit") or 0),
     }
-    return {"channel_title": t["title"].format(**fields), "body": t["body"].format(**fields), "language": lang if lang in pack else "en"}
+    return {
+        "channel_title": template["title"].format(**fields),
+        "body": template["body"].format(**fields),
+        "language": lang if lang in pack else "en",
+    }

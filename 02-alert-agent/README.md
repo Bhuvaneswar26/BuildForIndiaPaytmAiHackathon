@@ -4,6 +4,19 @@ Consumes FY metrics from the ingest pipeline, classifies risk, renders formal co
 
 Skills live in `skills/` and are loaded into the agent so classification, tone, and JSON shape stay consistent with the RAG advisor.
 
+## LangGraph architecture
+
+The agent is structured as a single LangGraph workflow instead of a free-form script:
+
+1. normalize input
+2. classify merchant risk
+3. render localized notification copy
+4. assemble the outbound payload
+5. dispatch through the MCP notification tool
+6. finalize the API response
+
+This keeps the business flow deterministic and makes it easy to add extra stages later, such as multi-language translation, output parsing, or data enrichment.
+
 ## Run
 
 Terminal A — notification bridge (MCP HTTP tools):
