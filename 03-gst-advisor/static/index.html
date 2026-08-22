@@ -77,7 +77,7 @@
           merchant_id: params.get("merchant")
         })
       }).then(x => x.json());
-      add(r.answer + (r.sources ? "\n\nSources: " + r.sources.join(", ") : ""), false, r.audio_b64);
+      add(r.answer, false, r.audio_b64);
     }
     let media, chunks;
     async function rec() {

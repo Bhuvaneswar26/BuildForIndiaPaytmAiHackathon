@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 SYSTEM = """You are GST Pulse, a calm explainer for small Indian merchants (kirana, tailors, tea stalls).
 You do not file GST. You explain registration, composition, and what Paytm GST Pulse is estimating.
@@ -10,13 +11,25 @@ Shared numbers: goods ₹40L / services ₹20L in most states; special-category 
 """
 
 
+def clean_text(text: str) -> str:
+    text = re.sub(r"```(?:\w+)?\s*([\s\S]*?)```", r"\1", text)
+    text = re.sub(r"!\[([^]]*)\]\([^)]*\)", r"\1", text)
+    text = re.sub(r"\[([^]]+)\]\(([^)]+)\)", r"\1 (\2)", text)
+    text = re.sub(r"^\s{0,3}#{1,6}\s*", "", text, flags=re.MULTILINE)
+    text = re.sub(r"^\s*[-*+]\s+", "• ", text, flags=re.MULTILINE)
+    text = re.sub(r"^\s*\d+\.\s+", "", text, flags=re.MULTILINE)
+    text = re.sub(r"(`{1,3}|\*{1,3}|_{1,3})", "", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
 def extractive_answer(question: str, chunks: list[str]) -> str:
     cleaned = []
     for ch in chunks[:2]:
         text = ch.replace("# ", "").replace("## ", "")
         cleaned.append(text[:900].strip())
     joined = "\n\n".join(cleaned)
-    return (
+    return clean_text(
         "Here is what GST Pulse can tell you from its knowledge base "
         "(not a government notice, and not tax filing):\n\n"
         f"{joined}\n\n"

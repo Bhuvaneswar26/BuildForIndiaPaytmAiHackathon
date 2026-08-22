@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from app.config import settings
-from app.prompts import SYSTEM, extractive_answer, skill_text
+from app.prompts import SYSTEM, clean_text, extractive_answer, skill_text
 from app.rag import kb
 from app.sarvam import sarvam
 
@@ -39,6 +39,7 @@ async def answer_question(question: str, language: str) -> dict:
             text = await sarvam.translate(text, "en", language.split("-")[0])
         except Exception:
             pass
+    text = clean_text(text)
     audio_b64 = None
     if False:
         pass
