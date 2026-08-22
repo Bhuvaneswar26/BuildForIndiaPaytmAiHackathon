@@ -29,4 +29,6 @@ class AlertState(TypedDict):
     copy: dict[str, Any]
     payload: dict[str, Any]
     notified: dict[str, Any]
+    validation: dict[str, Any]
+    context: dict[str, Any]
     response: dict[str, Any]
