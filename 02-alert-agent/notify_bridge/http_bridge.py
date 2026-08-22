@@ -106,8 +106,12 @@ async def health():
 @app.post("/tools/notify_merchant")
 async def notify_merchant(body: NotifyIn):
     wa = send_whatsapp(body.phone, body.title, body.body)
-    mail = send_email(body.email, body.title, body.body)
-    return {"ok": True, "whatsapp": wa, "email": mail}
+    try:
+        mail = send_email(body.email, body.title, body.body)
+    except Exception as exc:
+        _log({"channel": "email", "mode": "live", "to": body.email, "ok": False, "error": str(exc)})
+        mail = {"channel": "email", "mode": "live", "to": body.email, "ok": False, "error": str(exc)}
+    return {"ok": wa.get("ok", False) and mail.get("ok", False), "whatsapp": wa, "email": mail}
 
 
 @app.get("/tools/recent")

@@ -3,7 +3,11 @@ $ErrorActionPreference = "Stop"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $scriptDir
 
-if (-not (Test-Path ".venv")) {
+if (-not (Test-Path ".venv\Scripts\Activate.ps1")) {
+    if (Test-Path ".venv") {
+        Write-Host "Incomplete virtual environment found. Recreating it..."
+        Remove-Item -Recurse -Force ".venv"
+    }
     Write-Host "Virtual environment not found. Creating one..."
     python -m venv .venv
 }
@@ -14,9 +18,11 @@ Write-Host "Installing Python dependencies..."
 python -m pip install -r requirements.txt
 
 if (-not (Test-Path ".env")) {
-    Write-Host "Creating .env from .env.example..."
-    Copy-Item .env.example .env
+    throw "Required configuration file .env was not found."
 }
+
+Write-Host "Loading configuration from .env..."
+Copy-Item .env .env.backup -Force
 
 Write-Host "Starting MCP notification bridge on port 8091..."
 Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$scriptDir'; .\.venv\Scripts\Activate.ps1; python -m uvicorn notify_bridge.http_bridge:app --host 0.0.0.0 --port 8091 --reload"
