@@ -5,4 +5,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 ENV PYTHONPATH=/app
 EXPOSE 8091
-CMD ["uvicorn", "notify_bridge.http_bridge:app", "--host", "0.0.0.0", "--port", "8091"]
+CMD ["sh", "-c", "uvicorn notify_bridge.http_bridge:app --host 0.0.0.0 --port ${PORT:-8091}"]
