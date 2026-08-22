@@ -42,6 +42,13 @@ Start-Svc `
     "$root\02-alert-agent" `
     ".\.venv\Scripts\python.exe -m uvicorn app.main:app --port 8090 --reload"
 
+$advisorEnv = Join-Path $root "03-gst-advisor\.env"
+$advisorExample = Join-Path $root "03-gst-advisor\.env.example"
+if (-not (Test-Path $advisorEnv) -and (Test-Path $advisorExample)) {
+    Copy-Item $advisorExample $advisorEnv
+    Write-Host "Created 03-gst-advisor\.env from .env.example (SARVAM_API_KEY)"
+}
+
 Start-Svc `
     "GST advisor :8100" `
     "$root\03-gst-advisor" `

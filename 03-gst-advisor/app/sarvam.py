@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 import httpx
 
 from app.config import settings
@@ -21,8 +23,11 @@ LANG_MAP = {
 
 class Sarvam:
     def __init__(self) -> None:
-        self.key = settings.sarvam_api_key
         self.base = settings.sarvam_base_url.rstrip("/")
+
+    @property
+    def key(self) -> str:
+        return settings.sarvam_key
 
     @property
     def enabled(self) -> bool:
@@ -90,16 +95,36 @@ class Sarvam:
     async def tts(self, text: str, lang: str) -> bytes | None:
         if not self.enabled:
             return None
-        speaker = "anushka"
+        language_code = LANG_MAP.get(lang, "en-IN")
+        try:
+            from sarvamai import SarvamAI
+
+            client = SarvamAI(api_subscription_key=self.key)
+            audio_chunks = await asyncio.to_thread(
+                client.text_to_speech.convert_stream,
+                text=text[:2400],
+                language_code=language_code,
+                speaker=settings.sarvam_tts_speaker,
+                model=settings.sarvam_tts_model,
+                pace=settings.sarvam_tts_pace,
+                speech_sample_rate=settings.sarvam_tts_sample_rate,
+                output_audio_codec="wav",
+            )
+            return b"".join(audio_chunks)
+        except (ImportError, AttributeError, TypeError):
+            pass
+
         async with httpx.AsyncClient(timeout=60.0) as client:
             resp = await client.post(
                 f"{self.base}/text-to-speech",
                 headers=self._headers(),
                 json={
                     "inputs": [text[:2400]],
-                    "target_language_code": LANG_MAP.get(lang, "en-IN"),
-                    "speaker": speaker,
-                    "model": "bulbul:v2",
+                    "target_language_code": language_code,
+                    "speaker": settings.sarvam_tts_speaker,
+                    "model": settings.sarvam_tts_model,
+                    "pace": settings.sarvam_tts_pace,
+                    "speech_sample_rate": settings.sarvam_tts_sample_rate,
                 },
             )
             if resp.status_code >= 400:
