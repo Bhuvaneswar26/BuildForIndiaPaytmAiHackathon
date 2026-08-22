@@ -27,13 +27,16 @@ class ChatIn(BaseModel):
 
 
 async def answer_question(question: str, language: str) -> dict:
-    hits = kb().search(question, k=4)
-    chunks = [c.text for _, c in hits]
+    document_query = any(term in question.lower().split() for term in ("document", "documents", "proof", "paperwork", "upload", "uploads"))
+    retrieval_query = question
+    if document_query:
+        retrieval_query += " deed certificate photo bank electricity rent lease consent PAN Aadhaar JPG PDF"
+    hits = kb().search(retrieval_query, k=8 if document_query else 4)
     sources = [c.source for _, c in hits]
-    context = "\n\n---\n\n".join(chunks)
+    context = "\n\n---\n\n".join(c.text for _, c in hits)
     user = f"Language: {language}\n\nQuestion: {question}\n\nRetrieved GST notes:\n{context}"
     llm = await sarvam.chat(SYSTEM + "\n\n" + skill_text(), user)
-    text = llm or extractive_answer(question, chunks)
+    text = llm or extractive_answer(question, hits)
     if sarvam.enabled and language not in ("en", "en-IN"):
         try:
             text = await sarvam.translate(text, "en", language.split("-")[0])
