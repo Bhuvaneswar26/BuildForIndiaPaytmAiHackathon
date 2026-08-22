@@ -9,6 +9,8 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.guardrails.validators import normalize_notify_payload, validate_metrics_input
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -37,12 +39,38 @@ class NotifyIn(BaseModel):
     email: str | None = None
     language: str | None = "en"
     risk: str | None = None
-    title: str
-    body: str
+    title: str | None = None
+    body: str | None = None
     advisor_url: str | None = None
     gst_portal: str | None = None
     checklist: list[str] | None = None
     metrics_summary: dict | None = None
+    metrics: dict | None = None
+
+    def model_post_init(self, __context):
+        payload = self.model_dump(exclude_none=True)
+        nested = payload.get("metrics") if isinstance(payload.get("metrics"), dict) else {}
+        merged = {**nested, **{k: v for k, v in payload.items() if k != "metrics" and v is not None}}
+
+        self.merchant_id = merged.get("merchant_id") or self.merchant_id
+        self.phone = merged.get("phone") or self.phone
+        self.email = merged.get("email") or self.email
+        self.language = merged.get("language") or self.language
+        self.risk = merged.get("risk") or self.risk
+        self.title = merged.get("title") or self.title
+        self.body = merged.get("body") or self.body
+        self.advisor_url = merged.get("advisor_url") or self.advisor_url
+        self.gst_portal = merged.get("gst_portal") or self.gst_portal
+        self.checklist = merged.get("checklist") or self.checklist
+        self.metrics_summary = merged.get("metrics_summary") or self.metrics_summary or {}
+
+        normalized = normalize_notify_payload({**merged, "metrics_summary": self.metrics_summary})
+        self.title = normalized.get("title")
+        self.body = normalized.get("body")
+        self.language = normalized.get("language")
+        self.merchant_id = self.merchant_id or normalized.get("merchant_id")
+        self.phone = self.phone or normalized.get("phone")
+        self.email = self.email or normalized.get("email")
 
 
 def _log(event: dict) -> None:
@@ -180,6 +208,10 @@ def _build_paytm_email_html(subject: str, body: str) -> str:
 
 
 def send_email(to: str | None, title: str, body: str) -> dict:
+    preview = {"to": to, "subject": title, "body": body}
+    print("[EMAIL_PREVIEW]", json.dumps(preview, ensure_ascii=False))
+    _log({"channel": "email", "mode": "pre_send", "to": to, "subject": title, "body": body})
+
     if not settings.smtp_host or not to:
         _log({"channel": "email", "mode": "mock", "to": to, "subject": title, "body": body})
         return {"channel": "email", "mode": "mock", "to": to, "ok": True}
@@ -200,7 +232,7 @@ def send_email(to: str | None, title: str, body: str) -> dict:
         if settings.smtp_user:
             smtp.login(settings.smtp_user, settings.smtp_password)
         smtp.send_message(msg)
-    _log({"channel": "email", "mode": "live", "to": to, "subject": title})
+    _log({"channel": "email", "mode": "live", "to": to, "subject": title, "body": body})
     return {"channel": "email", "mode": "live", "to": to, "ok": True}
 
 
@@ -211,13 +243,34 @@ async def health():
 
 @app.post("/tools/notify_merchant")
 async def notify_merchant(body: NotifyIn):
-    wa = send_whatsapp(body.phone, body.title, body.body)
+    payload = body.model_dump(exclude_none=True)
+    nested_metrics = payload.get("metrics") if isinstance(payload.get("metrics"), dict) else {}
+    merged = {**nested_metrics, **{k: v for k, v in payload.items() if k != "metrics" and v is not None}}
+
+    merged = normalize_notify_payload(merged)
+    validation = validate_metrics_input(
+        {
+            "merchant_id": merged.get("merchant_id") or (merged.get("metrics_summary") or {}).get("merchant_id"),
+            "email": merged.get("email"),
+            "phone": merged.get("phone"),
+            "language": merged.get("language"),
+        }
+    )
+
+    if not validation["ok"]:
+        return {
+            "ok": False,
+            "guardrails": {"allow_send": False, "violations": validation["issues"]},
+            "message": "Notification blocked: required merchant contact and language details are missing.",
+        }
+
+    wa = send_whatsapp(merged.get("phone"), merged.get("title"), merged.get("body"))
     try:
-        mail = send_email(body.email, body.title, body.body)
+        mail = send_email(merged.get("email"), merged.get("title"), merged.get("body"))
     except Exception as exc:
-        _log({"channel": "email", "mode": "live", "to": body.email, "ok": False, "error": str(exc)})
-        mail = {"channel": "email", "mode": "live", "to": body.email, "ok": False, "error": str(exc)}
-    return {"ok": wa.get("ok", False) and mail.get("ok", False), "whatsapp": wa, "email": mail}
+        _log({"channel": "email", "mode": "live", "to": merged.get("email"), "ok": False, "error": str(exc)})
+        mail = {"channel": "email", "mode": "live", "to": merged.get("email"), "ok": False, "error": str(exc)}
+    return {"ok": wa.get("ok", False) and mail.get("ok", False), "whatsapp": wa, "email": mail, "guardrails": {"allow_send": True, "violations": []}}
 
 
 @app.get("/tools/recent")
