@@ -4,72 +4,169 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Paytm GST Pulse</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <style>
     :root {
-      --bg: #07111f;
-      --card: #0f1c2e;
-      --line: #1e3350;
-      --text: #e8f1ff;
-      --muted: #8aa0bd;
-      --teal: #00baf2;
-      --ok: #3dd68c;
-      --warn: #f5c542;
-      --hot: #ff6b6b;
+      --paytm-navy: #012e6e;
+      --paytm-navy-deep: #001b4d;
+      --paytm-blue: #00baf2;
+      --paytm-blue-dark: #00a1d6;
+      --bg: #eef3f9;
+      --card: #ffffff;
+      --line: #d7e3f0;
+      --text: #1a2b45;
+      --muted: #5b6f88;
+      --ok: #00b259;
+      --warn: #ff9f00;
+      --hot: #e02020;
+      --shadow: 0 8px 24px rgba(1, 46, 110, 0.08);
     }
     * { box-sizing: border-box; }
     body {
-      margin: 0; font-family: "Segoe UI", system-ui, sans-serif;
-      background: radial-gradient(1200px 600px at 10% -10%, #123056, var(--bg));
-      color: var(--text); min-height: 100vh;
+      margin: 0;
+      font-family: Inter, "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
     }
     header {
-      padding: 20px 28px; display: flex; justify-content: space-between; align-items: center;
-      border-bottom: 1px solid var(--line);
+      background: linear-gradient(90deg, var(--paytm-navy-deep), var(--paytm-navy) 55%, #01408f);
+      color: #fff;
+      padding: 14px 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 4px 16px rgba(1, 46, 110, 0.28);
     }
-    header strong { color: var(--teal); letter-spacing: 0.04em; }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .logo-mark {
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      background: var(--paytm-blue);
+      display: grid;
+      place-items: center;
+      font-weight: 800;
+      color: var(--paytm-navy);
+      letter-spacing: -0.04em;
+      font-size: 18px;
+    }
+    .brand-copy strong {
+      display: block;
+      font-size: 20px;
+      letter-spacing: -0.03em;
+      color: #fff;
+    }
+    .brand-copy span {
+      font-size: 12px;
+      color: #9fdff8;
+      font-weight: 500;
+    }
+    header .env-chip {
+      background: rgba(0, 186, 242, 0.16);
+      border: 1px solid rgba(0, 186, 242, 0.4);
+      color: #c8f1ff;
+      border-radius: 999px;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
     .wrap { max-width: 980px; margin: 0 auto; padding: 24px; }
     select, button, input {
-      background: #10233a; color: var(--text); border: 1px solid var(--line);
-      border-radius: 10px; padding: 10px 12px; font-size: 14px;
+      background: #fff;
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 11px 14px;
+      font-size: 14px;
+      font-family: inherit;
     }
-    button { background: var(--teal); color: #04202c; font-weight: 700; cursor: pointer; }
+    button {
+      background: var(--paytm-blue);
+      color: var(--paytm-navy);
+      font-weight: 700;
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 4px 12px rgba(0, 186, 242, 0.35);
+    }
+    button:hover { background: var(--paytm-blue-dark); }
+    button.ghost {
+      background: #fff;
+      color: var(--paytm-navy);
+      border: 1px solid var(--line);
+      box-shadow: none;
+    }
     .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-bottom: 18px; }
     .card {
-      background: var(--card); border: 1px solid var(--line); border-radius: 18px;
-      padding: 22px; margin-bottom: 16px;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 22px;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow);
     }
-    .bar { height: 18px; background: #17304c; border-radius: 99px; overflow: hidden; }
-    .bar > span { display: block; height: 100%; background: linear-gradient(90deg, var(--ok), var(--warn), var(--hot)); }
-    h1 { font-size: 28px; margin: 0 0 8px; }
+    .bar { height: 14px; background: #e6eef7; border-radius: 99px; overflow: hidden; }
+    .bar > span {
+      display: block;
+      height: 100%;
+      background: linear-gradient(90deg, var(--ok), var(--paytm-blue), var(--warn), var(--hot));
+    }
+    h1 { font-size: 28px; margin: 0 0 8px; color: var(--paytm-navy); }
+    h3 { margin: 0 0 8px; color: var(--paytm-navy); }
     .muted { color: var(--muted); }
-    .nudge { border-left: 4px solid var(--warn); }
-    .caveat { font-size: 13px; color: #c7d7ee; background: #13263d; padding: 12px; border-radius: 12px; }
-    a { color: var(--teal); }
-    .kpi { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
-    .kpi div { background: #12253c; padding: 12px; border-radius: 12px; }
-    .kpi small { display: block; color: var(--muted); }
+    .nudge { border-left: 5px solid var(--warn); }
+    .caveat { font-size: 13px; color: #3d5470; background: #fff; padding: 14px 16px; border-radius: 14px; border: 1px dashed var(--line); }
+    a { color: #0179b5; font-weight: 600; }
+    .kpi { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-top: 16px; }
+    .kpi div {
+      background: #f4f9fd;
+      padding: 14px;
+      border-radius: 14px;
+      border: 1px solid #dceaf5;
+    }
+    .kpi small { display: block; color: var(--muted); margin-bottom: 4px; font-weight: 500; }
+    .kpi b { color: var(--paytm-navy); font-size: 18px; }
+    footer {
+      text-align: center;
+      padding: 8px 0 28px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+    }
     @media (max-width: 600px) {
-      header { padding: 16px; display: block; }
-      header .muted { margin-top: 8px; }
+      header { padding: 14px 16px; display: block; }
+      header .env-chip { margin-top: 10px; display: inline-block; }
       .wrap { padding: 16px; }
       .row { flex-direction: column; align-items: stretch; }
       select, button, input { width: 100%; min-height: 44px; }
       .kpi { grid-template-columns: 1fr 1fr; }
-      .card { padding: 16px; border-radius: 12px; }
+      .card { padding: 16px; border-radius: 16px; }
       h1 { font-size: 24px; }
     }
   </style>
 </head>
 <body>
   <header>
-    <div><strong>PAYTM GST PULSE</strong> · early visibility, not tax filing</div>
-    <div class="muted" id="env"></div>
+    <div class="brand">
+      <div class="logo-mark">P</div>
+      <div class="brand-copy">
+        <strong>Paytm</strong>
+        <span>GST Pulse · early visibility, not tax filing</span>
+      </div>
+    </div>
+    <div class="env-chip" id="env"></div>
   </header>
   <div class="wrap">
     <div class="row">
       <select id="merchant"></select>
       <button onclick="ingest()">Run nightly ingest now</button>
-      <button onclick="loadDash(true)">Refresh from mock Paytm</button>
+      <button class="ghost" onclick="loadDash(true)">Refresh from mock Paytm</button>
     </div>
     <div class="card">
       <h1 id="title">Select a merchant</h1>
@@ -88,6 +185,7 @@
       </div>
     </div>
     <p class="caveat" id="caveat"></p>
+    <footer>Secure payments · Paytm for Business</footer>
   </div>
   <script>
     const inr = n => "₹" + Number(n).toLocaleString("en-IN", {maximumFractionDigits: 0});
