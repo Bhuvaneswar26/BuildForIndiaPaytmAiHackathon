@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GST Pulse Advisor</title>
+  <style>
+    :root { --bg:#07111f; --card:#0f1c2e; --line:#1e3350; --text:#e8f1ff; --muted:#8aa0bd; --teal:#00baf2; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family:"Segoe UI",system-ui,sans-serif; background:var(--bg); color:var(--text); }
+    header { padding:16px 22px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; }
+    header strong { color: var(--teal); }
+    .wrap { max-width:720px; margin:0 auto; padding:18px; }
+    #log { min-height: 48vh; }
+    .msg { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px 14px; margin:10px 0; white-space:pre-wrap; }
+    .me { border-color: var(--teal); }
+    .row { display:flex; gap:8px; }
+    input, select, button { padding:10px; border-radius:10px; border:1px solid var(--line); background:#10233a; color:var(--text); }
+    button { background:var(--teal); color:#04202c; font-weight:700; cursor:pointer; }
+    .muted { color:var(--muted); font-size:13px; }
+    audio { width:100%; margin-top:8px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div><strong>GST PULSE</strong> · ask anything about registration</div>
+    <div class="muted">Same facts as the WhatsApp alerts</div>
+  </header>
+  <div class="wrap">
+    <p class="muted">Not a CA. Not the GST department. Voice needs a Sarvam API key.</p>
+    <div id="log"></div>
+    <div class="row">
+      <select id="lang">
+        <option value="en">English</option>
+        <option value="hi">Hindi</option>
+        <option value="te">Telugu</option>
+      </select>
+      <input id="q" style="flex:1" placeholder="What happens if I register for GST?" />
+      <button onclick="ask()">Ask</button>
+      <button onclick="rec()">Voice</button>
+    </div>
+  </div>
+  <script>
+    const params = new URLSearchParams(location.search);
+    if (params.get("lang")) document.getElementById("lang").value = params.get("lang");
+    function add(text, me, audio) {
+      const d = document.createElement("div");
+      d.className = "msg" + (me ? " me" : "");
+      d.textContent = text;
+      if (audio) {
+        const a = document.createElement("audio");
+        a.controls = true;
+        a.src = "data:audio/wav;base64," + audio;
+        d.appendChild(a);
+      }
+      document.getElementById("log").appendChild(d);
+    }
+    async function ask() {
+      const question = document.getElementById("q").value.trim();
+      if (!question) return;
+      add(question, true);
+      document.getElementById("q").value = "";
+      const r = await fetch("/v1/chat", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({
+          question,
+          language: document.getElementById("lang").value,
+          speak: true,
+          merchant_id: params.get("merchant")
+        })
+      }).then(x => x.json());
+      add(r.answer + (r.sources ? "\n\nSources: " + r.sources.join(", ") : ""), false, r.audio_b64);
+    }
+    let media, chunks;
+    async function rec() {
+      if (!media) {
+        const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+        media = new MediaRecorder(stream);
+        chunks = [];
+        media.ondataavailable = e => chunks.push(e.data);
+        media.onstop = async () => {
+          const blob = new Blob(chunks, {type: media.mimeType || "audio/webm"});
+          const fd = new FormData();
+          fd.append("file", blob, "q.webm");
+          fd.append("language", document.getElementById("lang").value);
+          const r = await fetch("/v1/voice", {method:"POST", body: fd}).then(x => x.json());
+          if (r.transcript) add(r.transcript, true);
+          add(r.answer || r.error || "No answer", false, r.audio_b64);
+          media = null;
+        };
+        media.start();
+        alert("Listening — tap Voice again to stop.");
+      } else {
+        media.stop();
+      }
+    }
+    document.getElementById("q").addEventListener("keydown", e => { if (e.key === "Enter") ask(); });
+    add("Ask about thresholds, composition, documents, or what registering actually changes.", false);
+  </script>
+</body>
+</html>

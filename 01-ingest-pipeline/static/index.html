@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Paytm GST Pulse</title>
+  <style>
+    :root {
+      --bg: #07111f;
+      --card: #0f1c2e;
+      --line: #1e3350;
+      --text: #e8f1ff;
+      --muted: #8aa0bd;
+      --teal: #00baf2;
+      --ok: #3dd68c;
+      --warn: #f5c542;
+      --hot: #ff6b6b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: "Segoe UI", system-ui, sans-serif;
+      background: radial-gradient(1200px 600px at 10% -10%, #123056, var(--bg));
+      color: var(--text); min-height: 100vh;
+    }
+    header {
+      padding: 20px 28px; display: flex; justify-content: space-between; align-items: center;
+      border-bottom: 1px solid var(--line);
+    }
+    header strong { color: var(--teal); letter-spacing: 0.04em; }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 24px; }
+    select, button, input {
+      background: #10233a; color: var(--text); border: 1px solid var(--line);
+      border-radius: 10px; padding: 10px 12px; font-size: 14px;
+    }
+    button { background: var(--teal); color: #04202c; font-weight: 700; cursor: pointer; }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-bottom: 18px; }
+    .card {
+      background: var(--card); border: 1px solid var(--line); border-radius: 18px;
+      padding: 22px; margin-bottom: 16px;
+    }
+    .bar { height: 18px; background: #17304c; border-radius: 99px; overflow: hidden; }
+    .bar > span { display: block; height: 100%; background: linear-gradient(90deg, var(--ok), var(--warn), var(--hot)); }
+    h1 { font-size: 28px; margin: 0 0 8px; }
+    .muted { color: var(--muted); }
+    .nudge { border-left: 4px solid var(--warn); }
+    .caveat { font-size: 13px; color: #c7d7ee; background: #13263d; padding: 12px; border-radius: 12px; }
+    a { color: var(--teal); }
+    .kpi { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+    .kpi div { background: #12253c; padding: 12px; border-radius: 12px; }
+    .kpi small { display: block; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <header>
+    <div><strong>PAYTM GST PULSE</strong> · early visibility, not tax filing</div>
+    <div class="muted" id="env"></div>
+  </header>
+  <div class="wrap">
+    <div class="row">
+      <select id="merchant"></select>
+      <button onclick="ingest()">Run nightly ingest now</button>
+      <button onclick="loadDash(true)">Refresh from mock Paytm</button>
+    </div>
+    <div class="card">
+      <h1 id="title">Select a merchant</h1>
+      <p class="muted" id="sub"></p>
+      <div class="bar" title="GST registration threshold"><span id="fill" style="width:0%"></span></div>
+      <p id="pctline"></p>
+      <div class="kpi" id="kpis"></div>
+    </div>
+    <div class="card nudge" id="nudge" style="display:none"></div>
+    <div class="card">
+      <h3>Add other income (cash / other apps)</h3>
+      <p class="muted">Optional and merchant-entered. GST looks at PAN-India aggregate, not just Paytm.</p>
+      <div class="row">
+        <input id="other" type="number" min="0" placeholder="Amount in ₹" />
+        <button onclick="saveOther()">Save other income</button>
+      </div>
+    </div>
+    <p class="caveat" id="caveat"></p>
+  </div>
+  <script>
+    const inr = n => "₹" + Number(n).toLocaleString("en-IN", {maximumFractionDigits: 0});
+    async function boot() {
+      const h = await fetch("/health").then(r => r.json());
+      document.getElementById("env").textContent = h.env + " · " + h.paytm_base_url;
+      const ms = await fetch("/v1/merchants").then(r => r.json());
+      const sel = document.getElementById("merchant");
+      sel.innerHTML = ms.map(m => `<option value="${m.merchant_id}">${m.name}</option>`).join("");
+      sel.onchange = () => loadDash(false);
+      await ingest();
+      await loadDash(false);
+    }
+    async function ingest() {
+      await fetch("/v1/ingest/run", {method: "POST"});
+    }
+    async function loadDash(refresh) {
+      const id = document.getElementById("merchant").value;
+      const d = await fetch(`/v1/merchants/${id}/dashboard?refresh=${refresh}`).then(r => r.json());
+      document.getElementById("title").textContent = d.name;
+      document.getElementById("sub").textContent =
+        `${d.business_type} · ${d.state_code}${d.is_special_category ? " (special-category state)" : ""} · ${d.fy_label}`;
+      document.getElementById("fill").style.width = Math.min(d.pct, 100) + "%";
+      document.getElementById("pctline").innerHTML =
+        `<b>${inr(d.aggregate_turnover)} of ${inr(d.threshold)}</b> — you are at <b>${d.pct}%</b>`;
+      document.getElementById("kpis").innerHTML = `
+        <div><small>Paytm (this FY)</small><b>${inr(d.paytm_turnover)}</b></div>
+        <div><small>Other income (entered)</small><b>${inr(d.other_income)}</b></div>
+        <div><small>Pace to limit</small><b>${d.months_to_threshold ?? "—"} months</b></div>
+        <div><small>Composition eligible?</small><b>${d.composition_eligible ? "Yes" : "No"}</b></div>`;
+      document.getElementById("other").value = d.other_income;
+      document.getElementById("caveat").textContent = d.data_caveat;
+      const n = document.getElementById("nudge");
+      if (d.pct >= 60) {
+        n.style.display = "block";
+        n.innerHTML = `<h3>Early warning</h3>
+          <p>At your current pace you may cross the GST registration limit in about
+          <b>${d.months_to_threshold} months</b>. Registering does not always mean high tax —
+          the Composition Scheme may keep this to a flat ${d.composition_rate_hint} with quarterly filing.</p>
+          <p><a href="${d.advisor_url}" target="_blank">Ask GST Pulse (chat + voice)</a> ·
+          <a href="${d.gst_portal}" target="_blank">Start GST registration</a></p>
+          <p class="muted">Checklist: PAN, bank details, address proof, photograph, Aadhaar of authorised signatory.</p>`;
+      } else n.style.display = "none";
+    }
+    async function saveOther() {
+      const id = document.getElementById("merchant").value;
+      const amount = Number(document.getElementById("other").value || 0);
+      await fetch(`/v1/merchants/${id}/other-income`, {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({amount})
+      });
+      await loadDash(false);
+    }
+    boot();
+  </script>
+</body>
+</html>

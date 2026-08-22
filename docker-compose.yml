@@ -1,0 +1,30 @@
+services:
+  ingest:
+    build: ./01-ingest-pipeline
+    environment:
+      APP_ENV: development
+      PAYTM_BASE_URL: http://127.0.0.1:8080
+      APP_PORT: "8080"
+      ALERT_AGENT_URL: http://alert:8090
+      ADVISOR_PUBLIC_URL: http://localhost:8100
+    ports:
+      - "8088:8080"
+  alert:
+    build: ./02-alert-agent
+    environment:
+      MCP_NOTIFY_URL: http://notify:8091
+      ADVISOR_PUBLIC_URL: http://localhost:8100
+    ports:
+      - "8090:8090"
+  notify:
+    build:
+      context: ./02-alert-agent
+      dockerfile: Dockerfile.notify
+    ports:
+      - "8091:8091"
+  advisor:
+    build: ./03-gst-advisor
+    env_file:
+      - ./03-gst-advisor/.env.example
+    ports:
+      - "8100:8100"
