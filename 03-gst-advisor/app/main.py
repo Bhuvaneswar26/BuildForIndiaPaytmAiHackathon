@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from app.config import settings
-from app.prompts import SYSTEM, clean_text, extractive_answer, skill_text
+from app.prompts import ANSWER_INSTRUCTIONS, SYSTEM, clean_text, extractive_answer, flatten_for_display, skill_text
 from app.rag import kb
 from app.sarvam import sarvam
 
@@ -26,15 +26,57 @@ class ChatIn(BaseModel):
     speak: bool = False
 
 
+_TOPIC_HINTS = (
+    ("document", " documents proof paperwork deed certificate photo bank electricity rent lease consent PAN Aadhaar JPG PDF size"),
+    ("proof", " documents proof paperwork deed certificate photo bank electricity rent lease consent PAN Aadhaar"),
+    ("paperwork", " documents checklist constitution signatory principal place of business"),
+    ("composition", " composition scheme 1.5 crore 50 lakh quarterly GSTR-4 input tax credit flat rate"),
+    ("threshold", " aggregate turnover 40 lakh 20 lakh special category goods services registration"),
+    ("register", " GST registration process TRN ARN GSTIN documents 30 days portal"),
+    ("registration", " GST registration process TRN ARN GSTIN documents eligibility types"),
+    ("what happens", " registration composition compliance GSTR returns input tax credit"),
+)
+
+
+def _retrieval_query(question: str) -> tuple[str, int]:
+    q = question.lower()
+    extra = []
+    k = 8
+    for needle, hint in _TOPIC_HINTS:
+        if needle in q:
+            extra.append(hint)
+            k = 12
+    return question + "".join(extra), k
+
+
+def _bounded_context(hits: list, max_chars: int = 16000) -> str:
+    parts: list[str] = []
+    used = 0
+    for _, chunk in hits:
+        block = flatten_for_display(
+            f"Source: {chunk.source}\nSection: {chunk.title}\n{chunk.text}"
+        )
+        if used and used + len(block) > max_chars:
+            remain = max_chars - used
+            if remain > 500:
+                parts.append(block[:remain].rstrip() + "\n[section truncated]")
+            break
+        parts.append(block)
+        used += len(block)
+    return "\n\n---\n\n".join(parts)
+
+
 async def answer_question(question: str, language: str) -> dict:
-    document_query = any(term in question.lower().split() for term in ("document", "documents", "proof", "paperwork", "upload", "uploads"))
-    retrieval_query = question
-    if document_query:
-        retrieval_query += " deed certificate photo bank electricity rent lease consent PAN Aadhaar JPG PDF"
-    hits = kb().search(retrieval_query, k=8 if document_query else 4)
+    retrieval_query, k = _retrieval_query(question)
+    hits = kb().search(retrieval_query, k=k)
     sources = [c.source for _, c in hits]
-    context = "\n\n---\n\n".join(c.text for _, c in hits)
-    user = f"Language: {language}\n\nQuestion: {question}\n\nRetrieved GST notes:\n{context}"
+    context = _bounded_context(hits)
+    user = (
+        f"Language: {language}\n\n"
+        f"Question: {question}\n\n"
+        f"{ANSWER_INSTRUCTIONS}\n\n"
+        f"Retrieved GST notes:\n{context}"
+    )
     llm = await sarvam.chat(SYSTEM + "\n\n" + skill_text(), user)
     text = llm or extractive_answer(question, hits)
     if sarvam.enabled and language not in ("en", "en-IN"):

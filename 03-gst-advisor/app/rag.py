@@ -10,6 +10,11 @@ from pathlib import Path
 from app.config import settings
 
 _TOKEN = re.compile(r"[a-zA-Z0-9₹%]+")
+_STOPWORDS = {
+    "a", "an", "and", "are", "be", "can", "do", "does", "for", "how", "i",
+    "in", "is", "it", "my", "of", "on", "or", "the", "to", "what", "when",
+    "where", "which", "who", "why", "with", "you", "your",
+}
 
 
 @dataclass
@@ -22,7 +27,7 @@ class Chunk:
 
 
 def _tokens(text: str) -> list[str]:
-    return [t.lower() for t in _TOKEN.findall(text)]
+    return [t.lower() for t in _TOKEN.findall(text) if t.lower() not in _STOPWORDS]
 
 
 class KnowledgeBase:
@@ -63,13 +68,27 @@ class KnowledgeBase:
         self.average_length = sum(item[4] for item in parsed) / n
         self.chunks = [Chunk(s, b, tf, heading, count) for s, b, tf, heading, count in parsed]
 
-    def search(self, query: str, k: int = 4) -> list[tuple[float, Chunk]]:
+    _SKIP_TITLES = {
+        "table of contents",
+        "quick navigation",
+        "version history",
+        "version history & updates",
+        "related guides",
+        "quick reference: phone numbers & links",
+        "notes for professionals & advisors",
+        "document storage & record management",
+    }
+
+    def search(self, query: str, k: int = 8) -> list[tuple[float, Chunk]]:
         qtf: dict[str, float] = {}
         qt = _tokens(query)
         for t in qt:
             qtf[t] = qtf.get(t, 0) + 1
         scored = []
         for ch in self.chunks:
+            title_l = ch.title.lower().strip()
+            if title_l in self._SKIP_TITLES:
+                continue
             score = 0.0
             for t, qv in qtf.items():
                 term_frequency = ch.tf.get(t, 0.0)
@@ -85,7 +104,28 @@ class KnowledgeBase:
                 score += 1.0
             scored.append((score, ch))
         scored.sort(key=lambda x: x[0], reverse=True)
-        return [x for x in scored[:k] if x[0] > 0] or scored[:k]
+        top = [x for x in scored[:k] if x[0] > 0] or scored[:k]
+        return self._with_neighbors(top, max_extra=4)
+
+    def _with_neighbors(self, hits: list[tuple[float, Chunk]], max_extra: int = 4) -> list[tuple[float, Chunk]]:
+        """Pull neighboring sections from the same file so procedures stay complete."""
+        by_id = {id(ch): (score, ch) for score, ch in hits}
+        extras = 0
+        for i, ch in enumerate(self.chunks):
+            if id(ch) not in by_id or extras >= max_extra:
+                continue
+            for j in (i - 1, i + 1):
+                if extras >= max_extra or j < 0 or j >= len(self.chunks):
+                    continue
+                neighbor = self.chunks[j]
+                if neighbor.source != ch.source or id(neighbor) in by_id:
+                    continue
+                if neighbor.title.lower().strip() in self._SKIP_TITLES:
+                    continue
+                by_id[id(neighbor)] = (by_id[id(ch)][0] * 0.85, neighbor)
+                extras += 1
+        ordered = sorted(by_id.values(), key=lambda x: x[0], reverse=True)
+        return ordered
 
 
 _kb: KnowledgeBase | None = None
